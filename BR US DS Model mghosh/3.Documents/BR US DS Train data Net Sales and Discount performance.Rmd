@@ -1,0 +1,169 @@
+---
+title: "BR US Discount Sensitivity train data Validation data performance summary"
+output:
+  html_notebook: default
+  html_document: default
+  pdf_document: default
+---
+
+Load the data to the environment
+```{r}
+Score_Data<- read.table(file = "//10.8.8.51/lv0/Move to Box/Mithun/projects/9.BR_US_DS_Project/1.data/BR_US_Train_Data_Score.txt",header=T,sep=",",stringsAsFactors=FALSE)
+
+BR_US_DS_resp <- read.table(file="//10.8.8.51/lv0/Move to Box/Mithun/projects/9.BR_US_DS_Project/1.data/BR_disc_sens_Data_pull_response.txt",sep="|",header=F,stringsAsFactors = F)
+
+names(BR_US_DS_resp) <- c("customer_key","gross_sales_amt","net_sales_amt","resp_disc_percent","item_qty")
+
+require(dplyr)
+full_data <- left_join(Score_Data,BR_US_DS_resp,by=c("Customer_key" ="customer_key"))
+
+full_data[is.na(full_data)] <-0
+
+full_data$resp_disc_percent[full_data$resp_disc_percent > 1] <- 1
+full_data$resp_disc_percent[full_data$resp_disc_percent < 0] <- 0
+
+gross_sales_all<- sum(full_data$gross_sales_amt)
+net_sales_all <- sum(full_data$net_sales_amt)
+item_qty_all <- sum(full_data$item_qty)
+
+ #Baseline response rate 
+ bau_rate <- as.numeric(sum(full_data$Response)/nrow(full_data))
+
+```
+
+Create the deciles based on ensemble score by mean and median
+```{r}
+require(dplyr)
+# By Mean Score
+full_data <- full_data[order( - full_data$MeanScore),]
+full_data$Mean_Decile <- as.numeric(cut(1:nrow(full_data),breaks=quantile(0:nrow(full_data),probs=seq(0,1,by=0.1)), labels=1:10,right=T))
+
+summary_by_mean <- full_data %>% group_by(Mean_Decile) %>% summarise(Num_Cust=n(),Num_Resp=sum(Response), gross_sales=sum(gross_sales_amt),net_sales=sum(net_sales_amt), disc_percent=abs(mean(resp_disc_percent)) , item_purchased=sum(item_qty)) %>% mutate(disc_percent=(1-net_sales/gross_sales) , Resp_rate=Num_Resp/Num_Cust ,Per_Resp_Cap = cumsum(Num_Resp)/sum(Num_Resp), Per_Gross_Sales_Cap=cumsum(gross_sales)/sum(gross_sales),Per_Net_Sales_Cap=cumsum(net_sales)/sum(net_sales), per_item_captured=cumsum(item_purchased)/sum(item_purchased), Lift_Response = cumsum(Num_Resp)/(cumsum(Num_Cust)*bau_rate),Lift_Gross_Sales = 10 * cumsum(gross_sales)/(Mean_Decile*gross_sales_all), Lift_Net_Sales=10* cumsum(net_sales)/(Mean_Decile*net_sales_all), Lift_item_purchase=10*cumsum(item_purchased)/(Mean_Decile*item_qty_all))
+
+full_data <- full_data[order( - full_data$MedianScore),]
+# By Median Score
+full_data$Median_Decile <- as.numeric(cut(1:nrow(full_data),breaks=quantile(0:nrow(full_data),probs=seq(0,1,by=0.1)), labels=1:10,right=T))
+
+summary_by_median <- full_data %>% group_by(Median_Decile) %>% summarise(Num_Cust=n(),Num_Resp=sum(Response), gross_sales=sum(gross_sales_amt),net_sales=sum(net_sales_amt) , item_purchased=sum(item_qty)) %>% mutate(disc_percent=(1-net_sales/gross_sales),Resp_rate=Num_Resp/Num_Cust ,Per_Resp_Cap = cumsum(Num_Resp)/sum(Num_Resp), Per_Gross_Sales_Cap=cumsum(gross_sales)/sum(gross_sales),Per_Net_Sales_Cap=cumsum(net_sales)/sum(net_sales),per_item_captured=cumsum(item_purchased)/sum(item_purchased) , Lift_Response = cumsum(Num_Resp)/(cumsum(Num_Cust)*bau_rate),Lift_Gross_Sales = 10 * cumsum(gross_sales)/(Median_Decile*gross_sales_all), Lift_Net_Sales=10* cumsum(net_sales)/(Median_Decile*net_sales_all), Lift_item_purchase=10*cumsum(item_purchased)/(Median_Decile*item_qty_all))
+```
+Summary by Mean Ensemble
+```{r}
+summary_by_mean
+```
+Summary by Median Ensemble
+```{r}
+summary_by_median
+```
+
+
+Barplot by decile for median ensemble
+```{r}
+require(ggplot2)
+require(reshape2)
+summary_by_median2 <- melt(data = summary_by_median[,c("Median_Decile","Resp_rate","disc_percent")],id=1)
+ggplot(data=summary_by_median2,aes(x = Median_Decile)) + geom_bar(aes(y=value,fill=variable),stat="identity",position = "dodge") + theme(legend.position="bottom") + ylab("Response rate and Discount Rate")+xlab("Decile")+ggtitle("Response Rate and Discount Percentage across deciles")
+```
+Connected Barplot by decile for median ensemble
+```{r}
+require(ggplot2)
+require(reshape2)
+summary_by_median2 <- melt(data = summary_by_median[,c("Median_Decile","Resp_rate","disc_percent")],id=1)
+ggplot(data=summary_by_median2,aes(x = Median_Decile)) + geom_bar(aes(y=value,fill=variable),stat="identity",position = "dodge") + geom_line(aes(y=value,color=variable),stat="identity") + theme(legend.position="bottom") + ylab("Response rate and Discount Rate")+xlab("Decile")+ggtitle("Response Rate and Discount Percentage across deciles ")
+```
+LinePlot decile for median ensemble
+```{r}
+require(ggplot2)
+require(reshape2)
+summary_by_median2 <- melt(data = summary_by_median[,c("Median_Decile","Resp_rate","disc_percent")],id=1)
+ggplot(data=summary_by_median2,aes(x = Median_Decile)) +  geom_line(aes(y=value,color=variable),stat="identity") + theme(legend.position="bottom") + ylab("Response rate and Discount Rate")+xlab("Decile")+ggtitle("Response Rate and Discount Percentage across deciles ")
+```
+
+Barplot of Gain by decile for median ensemble
+```{r}
+require(ggplot2)
+require(reshape2)
+summary_by_median4 <- melt(summary_by_median[,c("Median_Decile","Lift_Response","Lift_Gross_Sales","Lift_Net_Sales","Lift_item_purchase")],id=1)
+ggplot(data=summary_by_median4,aes(x = Median_Decile)) +  geom_bar(aes(y=value,fill=variable),stat="identity",width=0.8, position = "dodge")  + theme(legend.position="bottom") + ylab("")+xlab("Decile")+ggtitle("Gain across deciles by ensembling by median")
+```
+Connected Barplot of Gain by decile for median ensemble
+```{r}
+require(ggplot2)
+require(reshape2)
+summary_by_median4 <- melt(summary_by_median[,c("Median_Decile","Lift_Response","Lift_Gross_Sales","Lift_Net_Sales","Lift_item_purchase")],id=1)
+ggplot(data=summary_by_median4,aes(x = Median_Decile)) +  geom_bar(aes(y=value,fill=variable),stat="identity",width=0.8, position = "dodge")  + geom_line(aes(y=value,color=variable),stat="identity") + theme(legend.position="bottom") + ylab("")+xlab("Decile")+ggtitle("Gain across deciles by ensembling by median")
+```
+Lineplot of Gain by decile for median ensemble
+```{r}
+require(ggplot2)
+require(reshape2)
+summary_by_median4 <- melt(summary_by_median[,c("Median_Decile","Lift_Response","Lift_Gross_Sales","Lift_Net_Sales","Lift_item_purchase")],id=1)
+ggplot(data=summary_by_median4,aes(x = Median_Decile)) +   geom_line(aes(y=value,color=variable),stat="identity") + theme(legend.position="bottom") + ylab("")+xlab("Decile")+ggtitle("Gain across deciles by ensembling by median")
+```
+Data summary by percentile 
+```{r}
+
+require(dplyr)
+# By Median Score
+full_data <- full_data[order( - full_data$MedianScore),]
+# By Median Score
+full_data$Median_Percentile <- as.numeric(cut(1:nrow(full_data),breaks=quantile(0:nrow(full_data),probs=seq(0,1,by=0.01)), labels=1:100,right=T))
+
+summary_by_median_percentile <- full_data %>% group_by(Median_Percentile) %>% summarise(Num_Cust=n(),Num_Resp=sum(Response), gross_sales=sum(gross_sales_amt),net_sales=sum(net_sales_amt), item_purchased=sum(item_qty)) %>% mutate(disc_percent=(1-net_sales/gross_sales) , Resp_rate=Num_Resp/Num_Cust ,Per_Resp_Cap = cumsum(Num_Resp)/sum(Num_Resp), Per_Gross_Sales_Cap=cumsum(gross_sales)/sum(gross_sales),Per_Net_Sales_Cap=cumsum(net_sales)/sum(net_sales),per_item_captured= cumsum(item_purchased)/sum(item_purchased), Lift_Response = cumsum(Num_Resp)/(cumsum(Num_Cust)*bau_rate),Lift_Gross_Sales = 100 * cumsum(gross_sales)/(Median_Percentile*gross_sales_all), Lift_Net_Sales=100* cumsum(net_sales)/(Median_Percentile*net_sales_all), Lift_item_purchase=100*cumsum(item_purchased)/(Median_Percentile*item_qty_all))
+
+```
+
+
+Barplot by percentile for median ensemble
+```{r}
+require(ggplot2)
+require(reshape2)
+summary_by_median_percentile1 <- melt(data=summary_by_median_percentile[c("Median_Percentile","Resp_rate","disc_percent")],id=1)
+
+ggplot(data=summary_by_median_percentile1,aes(x = Median_Percentile)) +  geom_bar(aes(y=value,fill=variable),stat="identity")  + ylab("Response Rate and Discount Percentage")+xlab("Percentile")+ggtitle("Response Rate and Discount Percentage across percentiles by ensembling by median") + facet_wrap(~variable)+theme(legend.position="bottom")
+
+
+```
+Area Plot by percentile for median ensemble Gross Sales  and Net Sales
+```{r}
+require(ggplot2)
+require(reshape2)
+summary_by_median_percentile2 <- melt(data=summary_by_median_percentile[c("Median_Percentile","gross_sales","net_sales")],id=1)
+
+ggplot(data=summary_by_median_percentile2,aes(x = Median_Percentile)) +  geom_area(aes(y=value,fill=variable),stat="identity",position = position_dodge(width = 0.0))  + ylab("Response Rate and Discount Percentage")+xlab("Percentile")+ggtitle("Revenue across percentiles by ensembling by median") + theme(legend.position="bottom")
+
+
+```
+
+Areaplot of Gain by percentile for median ensemble
+```{r}
+require(ggplot2)
+require(reshape2)
+summary_by_median_percentile3 <- melt(summary_by_median_percentile[,c("Median_Percentile","Lift_Response","Lift_Gross_Sales","Lift_Net_Sales","Lift_item_purchase")],id=1)
+ggplot(data=summary_by_median_percentile3,aes(x = Median_Percentile)) +  geom_area(aes(y=value,fill=variable),stat="identity")  + ylab("Gain to be achieved")+xlab("Percentile")+ggtitle("Lift across percentiles by ensembling by median") + facet_wrap(~variable) + theme(legend.position="bottom")
+```
+Lineplot of Gain by percentile for median ensemble
+```{r}
+require(ggplot2)
+require(reshape2)
+summary_by_median_percentile3 <- melt(summary_by_median_percentile[,c("Median_Percentile","Lift_Response","Lift_Gross_Sales","Lift_Net_Sales","Lift_item_purchase")],id=1)
+ggplot(data=summary_by_median_percentile3,aes(x = Median_Percentile)) +  geom_line(aes(y=value,color=variable),stat="identity")  + ylab("Gain to be achieved")+xlab("Percentile")+ggtitle("Lift across percentiles by ensembling by median") + facet_wrap(~variable) + theme(legend.position="bottom")
+```
+Line of Gain by percentile for median ensemble
+```{r}
+require(ggplot2)
+require(reshape2)
+summary_by_median_percentile3 <- melt(summary_by_median_percentile[,c("Median_Percentile","Lift_Response","Lift_Gross_Sales","Lift_Net_Sales","Lift_item_purchase")],id=1)
+ggplot(data=summary_by_median_percentile3,aes(x = Median_Percentile)) +  geom_line(aes(y=value,color=variable),stat="identity")  + ylab("Gain to be achieved")+xlab("Percentile")+ggtitle("Lift across percentiles by ensembling by median")  + theme(legend.position="bottom")
+```
+
+
+Cumulative Percentage gain
+```{r}
+require(reshape2)
+summary_by_median_percentile$baseline_gain <- seq(0.01,1,by =0.01)
+summary_by_median_percentile4 <- melt(summary_by_median_percentile[,c("Median_Percentile","Per_Resp_Cap","Per_Gross_Sales_Cap","Per_Net_Sales_Cap","per_item_captured","baseline_gain")],id=1)
+ggplot(data=summary_by_median_percentile4,mapping = aes(x=Median_Percentile)) +
+  geom_line(aes(y=value, color=variable)) + ylab("% Response Captured") + xlab("% Customer Contacted") +ggtitle("Cumulative Gain Chart by median ensemble")+ theme(legend.position="bottom")
+
+
+```

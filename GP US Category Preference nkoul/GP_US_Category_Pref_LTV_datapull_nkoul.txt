@@ -1,0 +1,142 @@
+
+set mapred.job.queue.name=aa;
+use evergreenattribute;
+
+
+select count(distinct masterkey) from evergreenattribute.gpcategorypreferenceattributehistory where processingdate = '2017-08-31';
+--5473071 (Overall Data)
+
+womens_tops_knits	WOMENS_TOPS_KNITS
+	
+womens_denim	WOMENS_DENIM
+	
+womens_outerwear_sweater_like	WOMENS_OUTERWEAR_SWEATER_LIKE
+	
+womens_dresses	WOMENS_DRESSES
+
+create table mghosh.gp_catpref as
+select masterkey,customerkey,
+(case when size(attribute) > 4 
+and (attribute[0] == 'WOMENS_TOPS_KNITS' or attribute[1] == 'WOMENS_TOPS_KNITS' or attribute[2] == 'WOMENS_TOPS_KNITS' or attribute[3] == 'WOMENS_TOPS_KNITS'
+or attribute[4] == 'WOMENS_TOPS_KNITS') then 5
+when size(attribute) > 3
+and (attribute[0] == 'WOMENS_TOPS_KNITS' or attribute[1] == 'WOMENS_TOPS_KNITS' or attribute[2] == 'WOMENS_TOPS_KNITS' or attribute[3] == 'WOMENS_TOPS_KNITS') then 4
+when size(attribute) > 2
+and (attribute[0] == 'WOMENS_TOPS_KNITS' or attribute[1] == 'WOMENS_TOPS_KNITS' or attribute[2] == 'WOMENS_TOPS_KNITS' ) then 3
+when size(attribute) > 1
+and (attribute[0] == 'WOMENS_TOPS_KNITS' or attribute[1] == 'WOMENS_TOPS_KNITS' ) then 2
+when size(attribute) > 0
+and (attribute[0] == 'WOMENS_TOPS_KNITS' ) then 1
+else 0 end) as WOMENS_TOPS_KNITS_customer ,
+
+(case when size(attribute) > 4 
+and (attribute[0] == 'WOMENS_DENIM' or attribute[1] == 'WOMENS_DENIM' or attribute[2] == 'WOMENS_DENIM' or attribute[3] == 'WOMENS_DENIM'
+or attribute[4] == 'WOMENS_DENIM') then 5
+when size(attribute) > 3
+and (attribute[0] == 'WOMENS_DENIM' or attribute[1] == 'WOMENS_DENIM' or attribute[2] == 'WOMENS_DENIM' or attribute[3] == 'WOMENS_DENIM') then 4
+when size(attribute) > 2
+and (attribute[0] == 'WOMENS_DENIM' or attribute[1] == 'WOMENS_DENIM' or attribute[2] == 'WOMENS_DENIM' ) then 3
+when size(attribute) > 1
+and (attribute[0] == 'WOMENS_DENIM' or attribute[1] == 'WOMENS_DENIM' ) then 2
+when size(attribute) > 0
+and (attribute[0] == 'WOMENS_DENIM' ) then 1
+else 0 end) as WOMENS_DENIM_customer,
+
+(case when size(attribute) > 4 
+and (attribute[0] == 'WOMENS_OUTERWEAR_SWEATER_LIKE' or attribute[1] == 'WOMENS_OUTERWEAR_SWEATER_LIKE' or attribute[2] == 'WOMENS_OUTERWEAR_SWEATER_LIKE' or attribute[3] == 'WOMENS_OUTERWEAR_SWEATER_LIKE'
+or attribute[4] == 'WOMENS_OUTERWEAR_SWEATER_LIKE') then 5
+when size(attribute) > 3
+and (attribute[0] == 'WOMENS_OUTERWEAR_SWEATER_LIKE' or attribute[1] == 'WOMENS_OUTERWEAR_SWEATER_LIKE' or attribute[2] == 'WOMENS_OUTERWEAR_SWEATER_LIKE' or attribute[3] == 'WOMENS_OUTERWEAR_SWEATER_LIKE') then 4
+when size(attribute) > 2
+and (attribute[0] == 'WOMENS_OUTERWEAR_SWEATER_LIKE' or attribute[1] == 'WOMENS_OUTERWEAR_SWEATER_LIKE' or attribute[2] == 'WOMENS_OUTERWEAR_SWEATER_LIKE' ) then 3
+when size(attribute) > 1
+and (attribute[0] == 'WOMENS_OUTERWEAR_SWEATER_LIKE' or attribute[1] == 'WOMENS_OUTERWEAR_SWEATER_LIKE' ) then 2
+when size(attribute) > 0
+and (attribute[0] == 'WOMENS_OUTERWEAR_SWEATER_LIKE' ) then 1
+else 0 end) as WOMENS_OUTERWEAR_SWEATER_LIKE_customer,
+
+
+(case when size(attribute) > 4 
+and (attribute[0] == 'WOMENS_DRESSES' or attribute[1] == 'WOMENS_DRESSES' or attribute[2] == 'WOMENS_DRESSES' or attribute[3] == 'WOMENS_DRESSES'
+or attribute[4] == 'WOMENS_DRESSES') then 5
+when size(attribute) > 3
+and (attribute[0] == 'WOMENS_DRESSES' or attribute[1] == 'WOMENS_DRESSES' or attribute[2] == 'WOMENS_DRESSES' or attribute[3] == 'WOMENS_DRESSES') then 4
+when size(attribute) > 2
+and (attribute[0] == 'WOMENS_DRESSES' or attribute[1] == 'WOMENS_DRESSES' or attribute[2] == 'WOMENS_DRESSES' ) then 3
+when size(attribute) > 1
+and (attribute[0] == 'WOMENS_DRESSES' or attribute[1] == 'WOMENS_DRESSES' ) then 2
+when size(attribute) > 0
+and (attribute[0] == 'WOMENS_DRESSES' ) then 1
+else 0 end) as WOMENS_DRESSES_customer
+
+from  evergreenattribute.gpcategorypreferenceattributehistory where processingdate = '2017-08-31';
+
+select * from  evergreenattribute.lifetimevaluegpattributehistory limit 10;
+
+evergreenattribute.lifetimevaluegpattributehistory where rundate = '2017-07-08' and brand='GP' and market='US';
+
+drop table if exists mghosh.gp_catpref_LTV;
+create table mghosh.gp_catpref_LTV as
+select a.*, expectedltv12  from 
+ mghosh.gp_catpref a left outer join 
+ (select masterkey, expectedltv12 from evergreenattribute.lifetimevaluegpattributehistory 
+ where rundate = '2017-07-08' and brand='GP' and market='US') b 
+ on a.masterkey=b.masterkey;
+ 
+$>185	$80-184	$35-79	<35     
+
+drop table if exists mghosh.gp_catpref2;
+create table mghosh.gp_catpref2 as
+select  masterkey, (case when womens_tops_knits_customer == 0 then 0 else 1 end) as womens_tops_knits_customer,
+(case when womens_denim_customer == 0 then 0 else 1 end) as womens_denim_customer,
+(case when womens_outerwear_sweater_like_customer == 0 then 0 else 1 end) as womens_outerwear_sweater_like_customer,
+(case when womens_dresses_customer == 0 then 0 else 1 end) as womens_dresses_customer , 
+(case when nvl(expectedltv12,0) < 35 then '4. <35'  when nvl(expectedltv12,0) < 80 then '3.35-79' 
+when nvl(expectedltv12,0) < 185 then '2.80-184' else '1. 185+' end) as LTV_BIN , nvl(expectedltv12,0) as LTV
+from mghosh.gp_catpref_LTV ;
+
+create table mghosh.gp_catpref_summary as
+select womens_tops_knits_customer  ,womens_denim_customer ,            
+womens_outerwear_sweater_like_customer ,womens_dresses_customer,LTV_BIN, count(masterkey) as Num_customer, sum(LTV) as LTV_value
+from  mghosh.gp_catpref2
+group by womens_tops_knits_customer  ,womens_denim_customer ,            
+womens_outerwear_sweater_like_customer ,womens_dresses_customer,LTV_BIN ;
+
+
+---Only Top 1
+
+create table mghosh.gp_catprefx as
+select masterkey,customerkey,
+(case when size(attribute) > 0
+and (attribute[0] == 'WOMENS_TOPS_KNITS' ) then 1
+else 0 end) as WOMENS_TOPS_KNITS_customer ,
+
+(case when size(attribute) > 0
+and (attribute[0] == 'WOMENS_DENIM' ) then 1
+else 0 end) as WOMENS_DENIM_customer,
+
+(case when size(attribute) > 0
+and (attribute[0] == 'WOMENS_OUTERWEAR_SWEATER_LIKE' ) then 1
+else 0 end) as WOMENS_OUTERWEAR_SWEATER_LIKE_customer,
+
+
+(case when size(attribute) > 0
+and (attribute[0] == 'WOMENS_DRESSES' ) then 1
+else 0 end) as WOMENS_DRESSES_customer
+
+from  evergreenattribute.gpcategorypreferenceattributehistory where processingdate = '2017-08-31';
+
+drop table if exists mghosh.gp_catpref_LTV_x;
+create table mghosh.gp_catpref_LTV_x as
+select a.*, (case when nvl(expectedltv12,0) < 35 then '4.<35'  when nvl(expectedltv12,0) < 80 then '3.35-79' 
+when nvl(expectedltv12,0) < 185 then '2.80-184' else '1.185+' end) as LTV_BIN , nvl(expectedltv12,0) as LTV  from 
+ mghosh.gp_catprefx a left outer join 
+ (select masterkey, expectedltv12 from evergreenattribute.lifetimevaluegpattributehistory 
+ where rundate = '2017-07-08' and brand='GP' and market='US') b 
+ on a.masterkey=b.masterkey;
+ 
+ select womens_tops_knits_customer  ,womens_denim_customer ,            
+womens_outerwear_sweater_like_customer ,womens_dresses_customer,LTV_BIN, count(masterkey) as Num_customer, sum(LTV) as LTV_value
+from  mghosh.gp_catpref_LTV_x
+group by womens_tops_knits_customer  ,womens_denim_customer ,            
+womens_outerwear_sweater_like_customer ,womens_dresses_customer,LTV_BIN ;

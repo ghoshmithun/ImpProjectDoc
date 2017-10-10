@@ -1,0 +1,227 @@
+---
+title: ' Geo Location Wise Retail and Online Sale Visualization'
+output:
+  html_notebook: default
+  html_document: default
+  pdf_document: default
+---
+
+Geo-Specific Visualization of Retail and Online Sales
+
+```{r}
+library(ggmap)
+library(ggplot2)
+library(zipcode)
+
+data_dc <- read.delim(file='//10.8.8.51/lv0/Move to Box/Mithun/projects/9.BR_US_DS_Project/1.data/BR_disc_sens_geo_data.txt',
+                      sep = '|',header = F, col.names = c('customer_key',
+'percent_disc_last_12_mth',
+'br_net_sales_amt_12_mth',
+'flag_employee',
+'addr_zip_code',
+'resp_disc_percent',
+'browse_hit_ind_tot',
+'purchased',
+'br_online_sales12_mth',
+'br_offline_sales_12mth'))
+
+data_dc$br_retail_percent <-  data_dc$br_offline_sales_12mth / data_dc$br_net_sales_amt_12_mth
+
+data_dc$br_online_percent <-  data_dc$br_online_sales12_mth / data_dc$br_net_sales_amt_12_mth
+
+data_dc$br_gross_sales_amt <-  data_dc$br_net_sales_amt_12_mth / (1 - data_dc$percent_disc_last_12_mth)
+
+```
+Plot Data as per PIN code
+```{r}
+library(dplyr)
+zip_wise_data <- data_dc[,c("br_offline_sales_12mth","br_online_sales12_mth","br_net_sales_amt_12_mth","br_gross_sales_amt","addr_zip_code")] %>% group_by(addr_zip_code) %>% summarise(br_online_sales12_mth = sum(br_online_sales12_mth,na.rm=T), br_offline_sales_12mth = sum(br_offline_sales_12mth,na.rm=T), br_net_sales_amt_12_mth = sum(br_net_sales_amt_12_mth,na.rm=T), br_gross_sales_amt = sum(br_gross_sales_amt,na.rm=T))
+
+zip_wise_data <- zip_wise_data[zip_wise_data$addr_zip_code!='',]
+
+
+library(zipcode)
+data("zipcode")
+data_dc2<- inner_join(data_dc,zipcode,by=c("addr_zip_code"="zip"))
+library("ggplot2")
+
+zip_wise_data <- left_join(zipcode,zip_wise_data,by=c("zip"="addr_zip_code"))
+```
+Discount Rate by ZipCode
+
+```{r}
+zip_wise_data$disc_percent <- (1 - zip_wise_data$br_net_sales_amt_12_mth/zip_wise_data$br_gross_sales_amt )
+zip_wise_data$disc_percent[is.na(zip_wise_data$disc_percent)] <- 0
+zip_wise_data$disc_percent[zip_wise_data$disc_percent > 1] <- 1
+zip_wise_data$disc_percent[zip_wise_data$disc_percent < 0] <- 0
+
+zip_wise_data$Online_percent<-zip_wise_data$br_online_sales12_mth/zip_wise_data$br_net_sales_amt_12_mth
+zip_wise_data$Online_percent[is.na(zip_wise_data$Online_percent)] <- 0
+zip_wise_data$Online_percent[zip_wise_data$Online_percent > 1] <- 1
+zip_wise_data$Online_percent[zip_wise_data$Online_percent < 0] <- 0
+
+zip_wise_data$binx <- cut(zip_wise_data$disc_percent,breaks = c(-Inf,0,0.20,0.35,0.40,Inf),include.lowest = T,
+                          labels = c("No_Info","a_Low","b_Medium","c_High","d_VeryHigh"))
+
+
+zip_wise_data <-zip_wise_data[which(zip_wise_data$latitude < 50 & zip_wise_data$latitude > 25 &
+                                    zip_wise_data$longitude > -125 &  zip_wise_data$longitude < -66),]
+ggplot(data=zip_wise_data) + geom_point(aes(x=longitude, y=latitude, colour=binx)) +ggtitle(" Discount Rate  ZIPCODE wise") +theme(legend.position ="bottom")
+
+ggplot(zip_wise_data, aes(x = longitude, y = latitude,  fill= disc_percent )) + geom_polygon(colour = "white", size = 0.1) + theme(legend.position ="bottom")
+
+ggplot(zip_wise_data, aes(x = longitude, y = latitude,  fill= Online_percent )) + geom_polygon(colour = "white", size = 0.1) + theme(legend.position ="bottom")
+
+```
+Discount Bin 10 is highest Discount
+```{r}
+require(ggplot2)
+require(maptools)
+mapcounties <- map_data("county")
+mapstates <- map_data("state")
+
+counties <- map('county', fill=TRUE, col="transparent", plot=FALSE)
+IDs <- sapply(strsplit(counties$names, ":"), function(x) x[1])
+counties_sp <- map2SpatialPolygons(counties, IDs=IDs,
+                                   proj4string=CRS("+proj=longlat +datum=WGS84"))
+
+pointsSP <- SpatialPoints(as.data.frame(zip_wise_data[,c('longitude','latitude')]),
+proj4string=CRS("+proj=longlat +datum=WGS84"))
+indices <- over(pointsSP, counties_sp)
+
+countyNames <- sapply(counties_sp@polygons, function(x) x@ID)
+
+zip_wise_data$county<-countyNames[indices]
+# Generate Comma Separated County/Subregion list for all Counties of US
+#
+mapcounties$county <- with(mapcounties , paste(region, subregion, sep = ","))
+
+# Aggregate our data at County Level (it was earlier aggreated at zipcode level)
+#
+zip_wise_data.sum<- zip_wise_data %>% group_by(county) %>%  summarize(br_online_sales12_mth = sum(br_online_sales12_mth,na.rm=T), br_offline_sales_12mth = sum(br_offline_sales_12mth,na.rm=T), br_net_sales_amt_12_mth = sum(br_net_sales_amt_12_mth,na.rm=T), br_gross_sales_amt = sum(br_gross_sales_amt,na.rm=T),disc_percent=median(disc_percent,na.rm=T),Online_percent=median(Online_percent))
+
+
+# Remove any duplicate records
+#
+zip_wise_data.un<-zip_wise_data.sum[!duplicated(zip_wise_data[c("county")]),]
+
+zip_wise_data.final=merge(zip_wise_data.sum,zip_wise_data.un,by.x='county',by.y = 'county')
+
+zip_wise_data.final$disc_perc_bin <- as.factor(ntile(zip_wise_data.final$disc_percent.x,5))
+# Merge our data with all US counties data
+#
+zip_wise_data.final$Online_percent_bin <- as.factor(ntile(zip_wise_data.final$Online_percent.x,5))
+mergedata <- merge(mapcounties, zip_wise_data.final, by.x = "county", by.y = "county")
+```
+High Discount Rate County Wise
+```{r}
+map <- ggplot(mergedata, aes(long,lat,group=group)) + geom_polygon(aes(fill=disc_perc_bin)) 
+map <- map+theme(panel.background = element_rect(fill = "white"),legend.position = "bottom",
+        axis.ticks = element_blank(),
+        axis.title = element_blank(),
+        axis.text = element_blank())
+map <- map + geom_path(data = mapstates, colour = "black", size = .3)
+map <- map + geom_path(data = mapcounties, colour = "red", size = .5, alpha = .1)  +
+  expand_limits(x = mergedata$long, y = mergedata$lat)
+map
+
+
+```
+High Online Sale Percent County Wise
+
+```{r}
+ggplot(mergedata, aes(long,lat,group=group)) + geom_polygon(aes(fill=Online_percent_bin)) + theme(panel.background = element_rect(fill = "white"),legend.position = "bottom",
+        axis.ticks = element_blank(),
+        axis.title = element_blank(),
+        axis.text = element_blank()) + geom_path(data = mapstates, colour = "black", size = .3) + geom_path(data = mapcounties, colour = "red", size = .5, alpha = .1)  +
+  expand_limits(x = mergedata$long, y = mergedata$lat)
+
+```
+Statewide map
+```{r}
+
+states_map <-map_data("state")
+head(states_map)
+library(sqldf)
+
+data_dc3 <-  left_join(zipcode[,c("zip","state")],data_dc2,by=c("zip"="addr_zip_code"))
+
+require(dplyr)
+zip_wise_data_state <- data_dc2 %>% group_by(state) %>% summarise(br_online_sales12_mth = sum(br_online_sales12_mth,na.rm=T), br_offline_sales_12mth = sum(br_offline_sales_12mth,na.rm=T), br_net_sales_amt_12_mth = sum(br_net_sales_amt_12_mth,na.rm=T), br_gross_sales_amt = sum(br_gross_sales_amt,na.rm=T))
+
+st_code_file<- data.frame(full_name=c('alabama','alaska','arizona','arkansas','california','colorado',
+                                      'connecticut',	'delaware',	'district of columbia',	'florida',	'georgia',
+                                      'hawaii',	'idaho',	'illinois',	'indiana',	'iowa',	'kansas',	'kentucky',	
+                                      'louisiana',	'maine',	'maryland',	'massachusetts',	'michigan',	'minnesota',
+                                      'mississippi',	'missouri',	'montana',	'nebraska',	'nevada',	'new hampshire',
+                                      'new jersey',	'new mexico',	'new york',	'north carolina',	'north dakota',	
+                                      'ohio',	'oklahoma',	'oregon',	'pennsylvania',	'rhode island',	'south carolina',
+                                      'south dakota',	'tennessee',	'texas',	'utah',	'vermont',	'virginia',	'washington',
+                                      'west virginia',	'wisconsin',	'wyoming'),
+                          state_code=c('AL',	'AK',	'AZ',	'AR',	'CA',	'CO',	'CT',	'DE',	'DC',	'FL',	'GA',	'HI',	'ID',	'IL',
+                                       'IN',	'IA',	'KS',	'KY',	'LA',	'ME',	'MD',	'MA',	'MI',	'MN',	'MS',	'MO',	'MT',	'NE',
+                                       'NV',	'NH',	'NJ',	'NM',	'NY',	'NC',	'ND',	'OH',	'OK',	'OR',	'PA',	'RI',	'SC',	'SD',
+                                       'TN',	'TX',	'UT',	'VT',	'VA',	'WA',	'WV',	'WI',	'WY'))
+
+zip_wise_data_state <- inner_join(st_code_file,zip_wise_data_state,by=c("state_code"="state"))
+
+zip_wise_data_state$disc_percent <- (1 - zip_wise_data_state$br_net_sales_amt_12_mth/zip_wise_data_state$br_gross_sales_amt )
+zip_wise_data_state$disc_percent[is.na(zip_wise_data_state$disc_percent)] <- 0
+zip_wise_data_state$disc_percent[zip_wise_data_state$disc_percent > 1] <- 1
+zip_wise_data_state$disc_percent[zip_wise_data_state$disc_percent < 0] <- 0
+
+zip_wise_data_state$Online_percent <- zip_wise_data_state$br_online_sales12_mth/zip_wise_data_state$br_net_sales_amt_12_mth
+zip_wise_data_state$Online_percent[is.na(zip_wise_data_state$Online_percent)] <- 0
+zip_wise_data_state$Online_percent[zip_wise_data_state$Online_percent > 1] <- 1
+zip_wise_data_state$Online_percent[zip_wise_data_state$Online_percent < 0] <- 0
+
+
+```
+ Discount and % of Online Sales Visualization by State 
+```{r}
+zip_wise_data_state2 <- zip_wise_data_state[,c("full_name","disc_percent","Online_percent")]
+names(zip_wise_data_state2) <- c("state","disc_percent","Online_percent")
+
+
+ggplot(zip_wise_data_state2, aes(map_id = state)) +
+  geom_map(aes(fill = disc_percent), map = states_map, color ="black") +
+  expand_limits(x = states_map$long, y = states_map$lat) +
+  theme(legend.position = "bottom",
+        axis.ticks = element_blank(),
+        axis.title = element_blank(),
+        axis.text = element_blank()) +
+  scale_fill_gradient(low="green", high="red") +
+  guides(fill = guide_colorbar(barwidth = 10, barheight = 1))
+```
+% Online Sales by State
+```{r}
+ggplot(zip_wise_data_state2, aes(map_id = state)) +
+  geom_map(aes(fill = Online_percent), map = states_map, color ="black") +
+  expand_limits(x = states_map$long, y = states_map$lat) +
+  theme(legend.position = "bottom",
+        axis.ticks = element_blank(),
+        axis.title = element_blank(),
+        axis.text = element_blank()) +
+  scale_fill_gradient(low="green", high="red") 
+  guides(fill = guide_colorbar(barwidth = 10, barheight = .5))
+```
+
+Discount  Percent taken accross United States
+```{r}
+require(leaflet)
+
+leaflet(zip_wise_data) %>% addTiles() %>%
+  addCircles(lng = ~longitude, lat = ~latitude, weight = 1,
+             radius = ~(disc_percent-0.3)*100, popup = ~city  )
+```
+
+Online Sale Percent over overall sales accross United States
+
+```{r}
+require(leaflet)
+
+leaflet(zip_wise_data) %>% addTiles() %>%
+  addCircles(lng = ~longitude, lat = ~latitude, weight = 1,
+             radius = ~ (Online_percent-0.4)*100, popup = ~city  ,color = "green")
+```
+

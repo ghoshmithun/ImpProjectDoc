@@ -1,0 +1,143 @@
+---
+title: "BR US Discount Sensitivity full train data performance summary"
+output:
+  html_notebook: default
+  html_document: default
+  pdf_document: default
+---
+
+Load the data to the environment
+```{r}
+Score_Data <- read.table(file = "//10.8.8.51/lv0/Move to Box/Mithun/projects/9.BR_US_DS_Project/1.data/BR_US_Train_Data_Score.txt",header=T, sep=",",stringsAsFactors = F,skip=1)
+
+
+```
+
+Create the deciles based on ensemble score by mean and median
+```{r}
+require(dplyr)
+# By Mean Score
+Score_Data <- Score_Data[order( - Score_Data$MeanScore),]
+Score_Data$Mean_Decile <- as.numeric(cut(1:nrow(Score_Data),breaks=quantile(0:nrow(Score_Data),probs=seq(0,1,by=0.1)), labels=1:10,right=T))
+
+summary_by_mean <- Score_Data %>% group_by(Mean_Decile) %>% summarise(Num_Cust=n(),Num_Resp=sum(Response)) %>% mutate(Resp_rate=Num_Resp/Num_Cust ,Per_Resp_Cap = cumsum(Num_Resp)/sum(Num_Resp) , Lift = cumsum(Num_Resp)/cumsum(Num_Cust))
+
+Score_Data <- Score_Data[order( - Score_Data$MedianScore),]
+# By Median Score
+Score_Data$Median_Decile <- as.numeric(cut(1:nrow(Score_Data),breaks=quantile(0:nrow(Score_Data),probs=seq(0,1,by=0.1)), labels=1:10,right=T))
+
+summary_by_median <- Score_Data %>% group_by(Median_Decile) %>% summarise(Num_Cust=n(),Num_Resp=sum(Response)) %>% mutate(Resp_rate=Num_Resp/Num_Cust ,Per_Resp_Cap = cumsum(Num_Resp)/sum(Num_Resp) , Lift = cumsum(Num_Resp)/cumsum(Num_Cust))
+
+ #Baseline response rate 
+ bau_rate <- as.numeric(sum(Score_Data$Response)/nrow(Score_Data))
+ #0.2026353
+```
+Barpot by decile for mean ensemble
+```{r}
+require(ggplot2)
+ggplot(data=summary_by_mean,aes(x = Mean_Decile)) + geom_bar(aes(y=Resp_rate),stat="identity")  +geom_line(aes(y=bau_rate))+ylab("Response rate")+xlab("Decile")+ggtitle("Response Rate across deciles by ensembling through mean")
+```
+Barpot by decile for median ensemble
+```{r}
+require(ggplot2)
+ggplot(data=summary_by_median,aes(x = Median_Decile)) + geom_bar(aes(y=Resp_rate),stat="identity") +geom_line(aes(y=bau_rate))+ylab("Response rate")+xlab("Decile")+ggtitle("Response Rate across deciles by ensembling through median")
+```
+
+Load the required package for AUC
+```{r}
+require(pROC)
+require(AUC)
+```
+
+AUC curve by median score
+```{r}
+roc_median_score <- roc(Score_Data$MedianScore,as.factor(Score_Data$Response))
+plot(roc_median_score, main="AUC curve by median score")
+```
+
+AUC curve by mean score
+```{r}
+roc_mean_score <- roc(Score_Data$MeanScore,as.factor(Score_Data$Response))
+plot(roc_mean_score, main="AUC curve by mean score")
+
+```
+
+Overall AUC Value by mean score and median score
+
+
+```{r}
+
+auc(roc_mean_score) #0.6950653
+auc(roc_median_score) #0.6949955
+
+rm(roc_mean_score,roc_median_score)
+gc()
+```
+
+Data summary by percentile 
+```{r}
+
+require(dplyr)
+# By Mean Score
+Score_Data <- Score_Data[order( - Score_Data$MeanScore),]
+Score_Data$Mean_Percentile <- as.numeric(cut(1:nrow(Score_Data),breaks=quantile(0:nrow(Score_Data),probs=seq(0,1,by=0.01)), labels=1:100,right=T))
+
+summary_by_mean_percentile <- Score_Data %>% group_by(Mean_Percentile) %>% summarise(Num_Cust=n(),Num_Resp=sum(Response)) %>% mutate(Resp_rate=Num_Resp/Num_Cust ,Per_Resp_Cap = cumsum(Num_Resp)/sum(Num_Resp) , Lift = cumsum(Num_Resp)/cumsum(Num_Cust))
+
+summary_by_mean_percentile$baseline_gain <- seq(0.01,1,by =0.01)
+summary_by_mean_percentile$gain_over_bau <- summary_by_mean_percentile$Lift/(sum(summary_by_mean_percentile$Num_Resp)/sum(summary_by_mean_percentile$Num_Cust))
+
+
+Score_Data <- Score_Data[order( - Score_Data$MedianScore),]
+# By Median Score
+Score_Data$Median_Percentile <- as.numeric(cut(1:nrow(Score_Data),breaks=quantile(0:nrow(Score_Data),probs=seq(0,1,by=0.01)), labels=1:100,right=T))
+
+summary_by_median_percentile <- Score_Data %>% group_by(Median_Percentile) %>% summarise(Num_Cust=n(),Num_Resp=sum(Response)) %>% mutate(Resp_rate=Num_Resp/Num_Cust ,Per_Resp_Cap = cumsum(Num_Resp)/sum(Num_Resp) , Lift = cumsum(Num_Resp)/cumsum(Num_Cust))
+summary_by_median_percentile$baseline_gain <- seq(0.01,1,by =0.01)
+summary_by_median_percentile$gain_over_bau <- summary_by_median_percentile$Lift / bau_rate
+
+```
+Barpot by percentile for mean ensemble
+```{r}
+require(ggplot2)
+ggplot(data=summary_by_mean_percentile,aes(x = Mean_Percentile)) + geom_bar(aes(y=Resp_rate),stat="identity") +geom_line(aes(y=bau_rate))+ylab("Response rate")+xlab("Percentile")+ggtitle("Response Rate across percentile by ensembling through mean")
+
+```
+
+Barpot by percentile for median ensemble
+```{r}
+require(ggplot2)
+ggplot(data=summary_by_median_percentile,aes(x = Median_Percentile)) + geom_bar(aes(y=Resp_rate),stat="identity") +geom_line(aes(y=bau_rate))+ylab("Response rate")+xlab("Percentile")+ggtitle("Response Rate across percentiles by ensembling through median")
+
+
+```
+
+Cumulative Gain Chart
+```{r}
+require(ggplot2)
+
+# Cumulative Gain Chart
+ggplot(data=summary_by_mean_percentile,mapping = aes(x=Mean_Percentile))+geom_line(aes(y=baseline_gain, color="baseline_gain")) + 
+  geom_line(aes(y=Per_Resp_Cap, color="Per_Resp_Cap")) + ylab("% Response Captured") + xlab("% Customer Contacted") +ggtitle("Cumulative Gain Chart by mean ensemble")
+ggplot(data=summary_by_median_percentile,mapping = aes(x=Median_Percentile))+geom_line(aes(y=baseline_gain, color="baseline_gain")) + 
+  geom_line(aes(y=Per_Resp_Cap, color="Per_Resp_Cap")) + ylab("% Response Captured") + xlab("% Customer Contacted") +ggtitle("Cumulative Gain Chart by median ensemble")
+
+```
+Base Response rate Chart
+```{r}
+#Base Response rate Chart
+ggplot(data=summary_by_mean_percentile,mapping = aes(x=Mean_Percentile)) + geom_line(aes(y=Lift,color="Lift")) +geom_line(aes(y=bau_rate)) +
+    ylab("% Response Rate to be Achieved") + xlab("% customers contacted") + ggtitle("Overall response rate by rank ordering by mean ensemble")
+ggplot(data=summary_by_median_percentile,mapping = aes(x=Median_Percentile)) + geom_line(aes(y=Lift,color="Lift")) +geom_line(aes(y=bau_rate)) +
+  ylab("% Response Rate to be Achieved") + xlab("% customers contacted") + ggtitle("Overall response rate by rank ordering by median ensemble")
+```
+Cumulative Lift Chart
+```{r}
+
+# Cumulative Lift Chart
+ggplot(data=summary_by_mean_percentile,mapping = aes(x=Mean_Percentile)) + geom_line(aes(y=gain_over_bau,color="Lift")) +geom_line(aes(y=1, color="bau rate")) +
+  ylab("Gain achieved over bau rate") + xlab("% customers contacted") + ggtitle("Cumulative Gain chart by mean ensemble")
+ggplot(data=summary_by_median_percentile,mapping = aes(x=Median_Percentile)) + geom_line(aes(y=gain_over_bau,color="Lift")) +geom_line(aes(y=1, color="bau rate")) +
+  ylab("Gain achieved over bau rate") + xlab("% customers contacted") + ggtitle("Cumulative Gain chart by median ensemble")
+
+```

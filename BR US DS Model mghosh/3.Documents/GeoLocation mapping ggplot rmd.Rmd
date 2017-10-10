@@ -1,0 +1,218 @@
+---
+title: ' Geo Location Wise Discount Taken Visualization'
+output:
+  html_notebook: default
+  html_document: default
+  pdf_document: default
+---
+
+Geo-Specific Visualization of discount Sensitivity data
+
+```{r}
+library(ggmap)
+library(ggplot2)
+library(zipcode)
+
+data_dc <- read.delim(file='//10.8.8.51/lv0/Move to Box/Mithun/projects/9.BR_US_DS_Project/1.data/BR_disc_sens_Data_pull.txt',
+                      sep = '|',header = F, col.names = c('customer_key', 
+                      'flag_employee', 
+                      'offline_last_txn_date', 
+                      'online_last_txn_date', 
+                      'offline_disc_last_txn_date', 
+                      'total_plcc_cards', 
+                      'acquisition_date', 
+                      'time_since_last_retail_purchase', 
+                      'time_since_last_disc_purchase', 
+                      'num_days_on_books', 
+                      'avg_order_amt_last_6_mth', 
+                      'num_order_num_last_6_mth', 
+                      'avg_order_amt_last_12_mth', 
+                      'ratio_order_6_12_mth', 
+                      'num_order_num_last_12_mth', 
+                      'ratio_order_units_6_12_mth', 
+                      'br_net_sales_amt_12_mth', 
+                      'br_on_sales_ratio', 
+                      'num_disc_comm_responded', 
+                      'percent_disc_last_6_mth', 
+                      'percent_disc_last_12_mth', 
+                      'br_go_net_sales_ratio', 
+                      'br_bf_net_sales_ratio', 
+                      'br_gp_net_sales_ratio', 
+                      'card_status', 
+                      'disc_ats', 
+                      'non_disc_ats', 
+                      'ratio_disc_non_disc_ats', 
+                      'num_dist_catg_purchased', 
+                      'num_units_6mth', 
+                      'num_txn_6mth', 
+                      'num_units_12mth', 
+                      'num_txn_12mth', 
+                      'ratio_rev_rewd_12mth', 
+                      'ratio_rev_wo_rewd_12mth', 
+                      'num_em_campaign', 
+                      'per_elec_comm', 
+                      'on_sales_item_rev_12mth', 
+                      'on_sales_rev_ratio_12mth', 
+                      'on_sale_item_qty_12mth', 
+                      'addr_zip_code', 
+                      'customerkey', 
+                      'masterkey', 
+                      'mobile_ind_tot', 
+                      'searchdex_ind_tot', 
+                      'gp_hit_ind_tot', 
+                      'br_hit_ind_tot', 
+                      'on_hit_ind_tot', 
+                      'at_hit_ind_tot', 
+                      'factory_hit_ind_tot', 
+                      'sale_hit_ind_tot', 
+                      'markdown_hit_ind_tot', 
+                      'clearance_hit_ind_tot', 
+                      'pct_off_hit_ind_tot', 
+                      'browse_hit_ind_tot', 
+                      'home_hit_ind_tot', 
+                      'bag_add_ind_tot', 
+                      'purchased', 
+                      'resp_disc_percent'))
+
+data_dc <- data_dc[,c("customer_key","percent_disc_last_12_mth","br_net_sales_amt_12_mth","flag_employee","addr_zip_code","resp_disc_percent","browse_hit_ind_tot","purchased")]
+                   
+
+```
+Plot Data as per PIN code
+```{r}
+library(dplyr)
+pre_disc_rate <- data_dc[,c("percent_disc_last_12_mth","addr_zip_code")] %>% group_by(addr_zip_code) %>% summarise(pre_disc=median(percent_disc_last_12_mth))
+pre_disc_rate <- pre_disc_rate[pre_disc_rate$addr_zip_code!='',]
+
+
+library(zipcode)
+data("zipcode")
+data_dc<- inner_join(data_dc,zipcode,by=c("addr_zip_code"="zip"))
+library("ggplot2")
+
+pre_disc_rate <- left_join(zipcode,pre_disc_rate,by=c("zip"="addr_zip_code"))
+```
+Pre Discount Rate by ZipCode
+
+```{r}
+pre_disc_rate$pre_disc[is.na(pre_disc_rate$pre_disc)] <- -1
+pre_disc_rate$binx <- cut(pre_disc_rate$pre_disc,breaks = c(-Inf,0,0.20,0.35,0.40,Inf),include.lowest = T,
+                          labels = c("No_Info","a_Low","b_Medium","c_High","d_VeryHigh"))
+
+
+pre_disc_rate <-pre_disc_rate[which(pre_disc_rate$latitude < 50 & pre_disc_rate$latitude > 25 &
+                                    pre_disc_rate$longitude > -125 &  pre_disc_rate$longitude < -66),]
+ggplot(data=pre_disc_rate) + geom_point(aes(x=longitude, y=latitude, colour=binx)) +ggtitle("Pre Discount Rate ZIPCODE wise")
+
+```
+Post Discount Rate by Zipcode
+```{r}
+post_disc_rate <- data_dc[,c("resp_disc_percent","addr_zip_code")] %>% group_by(addr_zip_code) %>% summarise(post_disc=median(resp_disc_percent))
+post_disc_rate <- post_disc_rate[post_disc_rate$addr_zip_code!='',]
+
+post_disc_rate <- left_join(zipcode,post_disc_rate,by=c("zip"="addr_zip_code"))
+
+post_disc_rate$post_disc[is.na(post_disc_rate$post_disc)] <- -1
+post_disc_rate$binx <- cut(post_disc_rate$post_disc,breaks = c(-Inf,-0.40,-0.35,-0.20,0,Inf),include.lowest = T,
+                          labels = c("No_Info","a_Low","b_Medium","c_High","d_VeryHigh"))
+
+post_disc_rate <-post_disc_rate[which(post_disc_rate$latitude < 50 & post_disc_rate$latitude > 25 &
+                                    post_disc_rate$longitude > -125 &  post_disc_rate$longitude < -66),]
+ggplot(data=post_disc_rate) + geom_point(aes(x=longitude, y=latitude,color=binx)) +ggtitle("Post Discount Rate ZIPCODE wise") 
+
+```
+Statewide map
+```{r}
+
+states_map <-map_data("state")
+head(states_map)
+library(sqldf)
+
+data_dc2 <-  left_join(zipcode[,c("zip","state")],data_dc,by=c("zip"="addr_zip_code"))
+
+require(dplyr)
+pre_disc_rate_state <- data_dc2 %>% group_by(state) %>% summarise(median_disc=median(percent_disc_last_12_mth,na.rm=T) , per_brw_act = sum(browse_hit_ind_tot >0,na.rm=T)/n(), per_onl_act =sum(purchased>0,na.rm=T)/n())
+
+post_disc_rate_state<-data_dc2 %>% group_by(state) %>% summarise(median_disc=median(resp_disc_percent),na.rm=T)
+
+st_code_file<- data.frame(full_name=c('alabama','alaska','arizona','arkansas','california','colorado',
+                                      'connecticut',	'delaware',	'district of columbia',	'florida',	'georgia',
+                                      'hawaii',	'idaho',	'illinois',	'indiana',	'iowa',	'kansas',	'kentucky',	
+                                      'louisiana',	'maine',	'maryland',	'massachusetts',	'michigan',	'minnesota',
+                                      'mississippi',	'missouri',	'montana',	'nebraska',	'nevada',	'new hampshire',
+                                      'new jersey',	'new mexico',	'new york',	'north carolina',	'north dakota',	
+                                      'ohio',	'oklahoma',	'oregon',	'pennsylvania',	'rhode island',	'south carolina',
+                                      'south dakota',	'tennessee',	'texas',	'utah',	'vermont',	'virginia',	'washington',
+                                      'west virginia',	'wisconsin',	'wyoming'),
+                          state_code=c('AL',	'AK',	'AZ',	'AR',	'CA',	'CO',	'CT',	'DE',	'DC',	'FL',	'GA',	'HI',	'ID',	'IL',
+                                       'IN',	'IA',	'KS',	'KY',	'LA',	'ME',	'MD',	'MA',	'MI',	'MN',	'MS',	'MO',	'MT',	'NE',
+                                       'NV',	'NH',	'NJ',	'NM',	'NY',	'NC',	'ND',	'OH',	'OK',	'OR',	'PA',	'RI',	'SC',	'SD',
+                                       'TN',	'TX',	'UT',	'VT',	'VA',	'WA',	'WV',	'WI',	'WY'))
+
+pre_disc_rate_state <- inner_join(st_code_file,pre_disc_rate_state,by=c("state_code"="state"))
+post_disc_rate_state <- inner_join(st_code_file,post_disc_rate_state,by=c("state_code"="state"))
+
+
+```
+Pre Discount  Visualization by State 
+```{r}
+pre_disc_rate_state2 <- pre_disc_rate_state[,c("full_name","median_disc")]
+names(pre_disc_rate_state2) <- c("state","median_disc")
+
+ggplot(pre_disc_rate_state2, aes(map_id = state)) +
+  geom_map(aes(fill = median_disc), map = states_map, color ="black") +
+  expand_limits(x = states_map$long, y = states_map$lat) +
+  theme(legend.position = "bottom",
+        axis.ticks = element_blank(),
+        axis.title = element_blank(),
+        axis.text = element_blank()) +
+  scale_fill_gradient(low="green", high="red") +
+  guides(fill = guide_colorbar(barwidth = 10, barheight = .5))
+```
+
+Pre Online Browse Active by State 
+```{r}
+pre_disc_rate_state3 <- pre_disc_rate_state[,c("full_name","per_brw_act")]
+names(pre_disc_rate_state3) <- c("state","per_brw_act")
+
+ggplot(pre_disc_rate_state3, aes(map_id = state)) +
+  geom_map(aes(fill = per_brw_act), map = states_map, color ="black") +
+  expand_limits(x = states_map$long, y = states_map$lat) +
+  theme(legend.position = "bottom",
+        axis.ticks = element_blank(),
+        axis.title = element_blank(),
+        axis.text = element_blank()) +
+  scale_fill_gradient(low="white", high="blue") +
+  guides(fill = guide_colorbar(barwidth = 10, barheight = .5))
+```
+Pre Online  Purchase Active  Visualization by State 
+```{r}
+pre_disc_rate_state4 <- pre_disc_rate_state[,c("full_name","per_onl_act")]
+names(pre_disc_rate_state4) <- c("state","per_onl_act")
+
+ggplot(pre_disc_rate_state4, aes(map_id = state)) +
+  geom_map(aes(fill = per_onl_act), map = states_map, color ="black") +
+  expand_limits(x = states_map$long, y = states_map$lat) +
+  theme(legend.position = "bottom",
+        axis.ticks = element_blank(),
+        axis.title = element_blank(),
+        axis.text = element_blank()) +
+  scale_fill_gradient(low="white", high="green") +
+  guides(fill = guide_colorbar(barwidth = 10, barheight = .5))
+```
+
+Post Discount  Visualization by State 
+```{r}
+post_disc_rate_state <- post_disc_rate_state[,c("full_name","median_disc")]
+names(post_disc_rate_state) <- c("state","median_disc")
+
+ggplot(post_disc_rate_state, aes(map_id = state)) +
+  geom_map(aes(fill = median_disc), map = states_map, color ="black") +
+  expand_limits(x = states_map$long, y = states_map$lat) +
+  theme(legend.position = "bottom",
+        axis.ticks = element_blank(),
+        axis.title = element_blank(),
+        axis.text = element_blank()) +
+  scale_fill_gradient(low="red", high="green") +
+  guides(fill = guide_colorbar(barwidth = 10, barheight = .5))
+```

@@ -1,0 +1,53 @@
+IB_OUTPUT="/user/sdube/ib_output"
+TEMP_DIR="/user/sdube/tmp2"
+IB_INPUT="/user/sdube/i";
+GOOD_STYLES="/user/sdube/g";
+IB_RECO_OUTPUT="/user/sdube/reco_output"
+
+hadoop fs -rmr $IB_OUTPUT
+
+hadoop fs -rmr $TEMP_DIR
+
+
+mahout org.apache.mahout.cf.taste.hadoop.item.RecommenderJob -Dmapred.reduce.tasks=50 -Dmapred.job.queue.name=cem --input $IB_INPUT --output $IB_OUTPUT   --similarityClassname SIMILARITY_COSINE  --booleanData FALSE --tempDir $TEMP_DIR --numRecommendations 28 --itemsFile $GOOD_STYLES/000000_0
+
+
+rm /home/sdube/ib_output/*
+mkdir -p /home/sdube/ib_output
+
+hadoop fs -copyToLocal /user/sdube/ib_output/* /home/sdube/ib_output/
+
+
+
+rm /home/sdube/ib_output2
+mkdir /home/sdube/ib_output2
+
+				#!/bin/bash
+				FILES=/home/sdube/ib_output/*
+				for f in $FILES
+				do
+				  echo "Processing $f file..."
+				tr -s '[ ]' ',' <$f>  /home/sdube/ib_output1/ib_output1.txt 
+				rm $f
+				awk -F'[ \\[:,\\]]' '{print  $1,$2,$4,$6,$8,$10,$12,$14,$16,$18,$20,$22,$24,$26,$28,$30,$32,$34,$36,$38,$40,$42,$44,$46,$48,$50,$52,$54,$56}' OFS=, /home/sdube/ib_output1/ib_output1.txt  > /home/sdube/ib_output2/ib_output2.txt
+				rm /home/sdube/ib_output1/ib_output1.txt 
+				sed -r 's/\s+//g' /home/sdube/ib_output2/ib_output2.txt > $f
+				rm /home/sdube/ib_output2/ib_output2.txt
+				done
+
+
+hadoop fs -rmr  $IB_RECO_OUTPUT
+hadoop fs -mkdir $IB_RECO_OUTPUT
+
+hadoop fs -copyFromLocal /home/sdube/ib_output/ /user/sdube/reco_output/
+hadoop fs -getmerge /user/sdube/reco_output/ib_output/ /home/sdube/ib_output/ib_output4.csv
+ hadoop fs -copyFromLocal /home/sdube/ib_output/ib_output4.csv /user/sdube/reco_output/
+
+
+rm /home/sdube/ib_output/ib_output.txt
+rm /home/sdube/ib_output/ib_output1.txt
+rm /home/sdube/ib_output/ib_output2.txt
+rm /home/sdube/ib_output/ib_output3.txt
+
+
+
